@@ -1,0 +1,21 @@
+HumanId,Name,Role,NodeId,Graph
+H1,Nguyễn Văn A,PM,N2,G1
+H2,Nguyễn Văn B,Techlead,N2,G1
+H2,Nguyễn Văn B,Techlead,N3,G1
+H3,Nguyễn Văn C,Developer,N5,G1
+H4,Nguyễn Văn D,Developer,N5,G1
+H5,Nguyễn Văn E,Tester,N4,G1
+H5,Nguyễn Văn E,Tester,N6,G1
+H6,Nguyễn Văn F,BA,N8,G1
+H2,Nguyễn Văn B,Techlead,N10,G1
+H7,Nguyễn Văn G,DevOps,N10,G1
+H3,Nguyễn Văn C,Developer,N12,G1
+H1,Nguyễn Văn A,PM,N13,G1
+H8,Nguyễn Văn H,Kỹ sư Hệ thống,N2,G2
+H9,Nguyễn Văn I,CSKH,N3,G2
+H10,Nguyễn Văn K,Backend Developer,N4,G2
+H10,Nguyễn Văn K,Backend Developer,N5,G2
+H11,Nguyễn Văn L,DevOps,N6,G2
+H8,Nguyễn Văn H,Kỹ sư Hệ thống,N8,G2
+H9,Nguyễn Văn I,CSKH,N9,G2
+H12,Nguyễn Văn M,Trưởng ca IT,N10,G2

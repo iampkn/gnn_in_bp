@@ -1,0 +1,17 @@
+DeviceId,DeviceName,DeviceType,NodeId,Graph
+D1,Laptop-PM,Laptop,N2,G1
+D2,Projector-Room1,Projector,N3,G1
+D3,PC-Dev-01,PC,N5,G1
+D4,PC-Dev-02,PC,N5,G1
+D5,Mobile-Testing,Smartphone,N6,G1
+D6,UAT-Server,Server,N6,G1
+D7,Prod-Server,Server,N10,G1
+D8,Monitor-Screen-01,Monitor,N13,G1
+D9,Alert-System,Phần mềm,N2,G2
+D10,Chat-Bot,Phần mềm,N3,G2
+D11,Log-Server-ELK,Server,N4,G2
+D12,Laptop-Hotfix,Laptop,N5,G2
+D13,CI-CD-Pipeline,Hệ thống,N6,G2
+D7,Prod-Server,Server,N6,G2
+D8,Monitor-Screen-01,Monitor,N8,G2
+D14,Confluence-Wiki,Hệ thống,N10,G2
