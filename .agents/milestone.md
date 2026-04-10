@@ -2,7 +2,7 @@
 
 ## GNN Process Discovery (Khám phá Quy trình bằng Graph Neural Networks)
 
-**Last Updated:** 2026-04-10 (v5)
+**Last Updated:** 2026-04-10 (v7)
 
 ---
 
@@ -33,7 +33,7 @@ Do_An/
 │   │       ├── GenerateData.tsx            # ✅ Data generation form + results table
 │   │       ├── SearchVector.tsx            # ✅ Vector search form + result cards
 │   │       ├── DiscoverProcess.tsx         # ✅ Discovery form + Petri net display
-│   │       └── PetriNetViewer.tsx          # ✅ Interactive DFG visualization (mined from event logs)
+│   │       └── PetriNetViewer.tsx          # ✅ Interactive process template graph viewer (structural)
 │   ├── package.json                        # Next 16.2.3, React 19.2.4
 │   └── ...
 ├── src/
@@ -46,12 +46,12 @@ Do_An/
 │   │   │   ├── human.csv                   # 12 human resource assignments
 │   │   │   └── device.csv                  # 17 device assignments
 │   │   └── generated/                      # Generated output (Docker volume mount)
-│   │       ├── event_log_all.csv           # ✅ 64,408 events, 4,400 cases
-│   │       └── event_log_G{N}.csv          # ✅ Per-graph event logs (22 files)
+│   │       └── event_log_all.csv           # ✅ ~2,500 events, 220 cases, 176 activities
 │   ├── phase1_data_generation/             # ✅ PHASE 1: COMPLETE
 │   │   ├── __init__.py
-│   │   ├── graph_reader.py                 # Read CSV -> ProcessGraph objects
-│   │   ├── graph_generator.py              # Generate 20 IT process variants
+│   │   ├── graph_reader.py                 # Read CSV -> ProcessGraph objects (G1, G2)
+│   │   ├── graph_generator.py              # Orchestrate diverse template generation
+│   │   ├── process_templates.py            # ✅ 20 unique IT process definitions (G3-G22)
 │   │   └── event_log_simulator.py          # Simulate event logs with gateway branching
 │   ├── phase2_vector_db/                   # ✅ PHASE 2: IMPLEMENTED
 │   │   ├── __init__.py
@@ -87,7 +87,7 @@ Do_An/
 │           ├── generate_data.py            # POST /api/generate-data
 │           ├── search_vector.py            # GET  /api/search-vector
 │           ├── discover_process.py         # POST /api/discover-process
-│           └── petri_net.py               # GET  /api/petri-net (DFG mined from event logs)
+│           └── petri_net.py               # GET  /api/petri-net (template graph structure)
 ```
 
 ---
@@ -97,13 +97,19 @@ Do_An/
 ### Phase 1: Data Generation & Preprocessing ✅ COMPLETE
 
 - **Status:** Fully implemented and tested
-- **Output:** 22 graphs (2 base + 20 variants), 64,408 events across 4,400 traces
-- **Key files:** `graph_reader.py`, `graph_generator.py`, `event_log_simulator.py`
+- **Output:** 22 graphs (2 base + 20 unique templates), ~2,500 events, 220 traces (10/graph), 176 unique activities
+- **Key files:** `graph_reader.py`, `graph_generator.py`, `process_templates.py`, `event_log_simulator.py`
 - **Run:** `python src/run_phase1.py`
 - **Details:**
-    - Reads G1 (IT project lifecycle, 14 nodes) and G2 (incident management, 11 nodes)
-    - Generates 20 variants (G3-G22) with varied Cost (±60-150%), HumanRes, Roles, Devices
-    - Simulates 200 traces per graph with ExclusiveGateway branching (loop probability decay)
+    - G1 (IT project lifecycle, 14 nodes) and G2 (incident management, 11 nodes) from CSV
+    - G3-G22: **20 unique IT process templates** defined in `process_templates.py`, each with:
+      - Different activities, topology, gateway patterns, and flow logic
+      - Covering: CI/CD, network ops, IAM, change mgmt, backup, security,
+        procurement, release mgmt, bug tracking, DB migration, cloud infra,
+        pentest, onboarding, disaster recovery, API integration,
+        performance optimization, agile sprint, IT audit, microservices, ETL
+    - Node count varies from 8-13 per process; gateway count 1-2 per process
+    - Simulates 10 traces per graph (default, configurable) with ExclusiveGateway branching (loop probability decay)
     - Output saved as CSV event logs
 
 ### Phase 2: Vector Database Integration ✅ IMPLEMENTED
@@ -148,22 +154,22 @@ Do_An/
     - `POST /api/generate-data` → Run Phase 1 pipeline
     - `GET  /api/search-vector` → Query similar tasks via Qdrant
     - `POST /api/discover-process` → GNN inference → Petri net JSON
-    - `GET  /api/petri-net?graph_id=G1` → Mine DFG from event logs with edge frequencies
+    - `GET  /api/petri-net?graph_id=G1` → Return process template graph structure (each node once)
     - ✅ CORS origins configurable via `CORS_ORIGINS` env var
 - **Frontend:** NextJS 16 interactive dashboard in `fe/`
     - ✅ Tabbed dashboard UI (4 tabs) with backend health check indicator
     - ✅ **Generate Data** tab: configure variants/traces/seed, view summary stats + per-graph table
     - ✅ **Vector Search** tab: search by activity/graph_id/min_cost, view scored result cards
     - ✅ **Process Discovery** tab: select graph_id or upload CSV, view Petri net structure
-    - ✅ **Petri Net** tab: interactive Directly-Follows Graph (DFG) visualization
-        - Mines process model from event log traces (not static templates)
-        - Each graph shows unique execution frequencies and flow patterns
-        - Edge labels show transition frequency, line thickness proportional to frequency
-        - BFS-layered layout: circles (Start/End), rectangles (Activity)
+    - ✅ **Petri Net** tab: interactive process template graph viewer
+        - Shows **template graph structure directly** — each node appears exactly once
+        - Gateway nodes visible with branching edges (all branches shown)
+        - BFS-layered layout: circles (Start/End), rectangles (Activity), diamonds (Gateway)
+        - Clean arrows without inflated frequency labels
         - Zoom (native wheel listener, `passive: false`) + Pan (drag) controls
-        - Click any node for details (activity, type, avg cost, occurrences)
-        - Summary bar: trace count, activity count, flow count, total cost
-        - Legend with node type + frequency explanation
+        - Click any node for details (activity, type, cost, human_res)
+        - Summary bar: node count, edge count, total cost
+        - Legend with node type explanation (Start, Activity, End, Gateway, Flow)
     - ✅ Typed API client (`fe/app/lib/api.ts`) with full error handling
     - ✅ Dark mode support via Tailwind CSS
 - **TODO:**
@@ -213,6 +219,80 @@ Do_An/
 ---
 
 ## CHANGE LOG
+
+### 2026-04-10 — Fixed inflated event counts: show template graph structure, reduce traces
+
+**Problem:** The Petri Net viewer was mining a DFG from 200 traces per graph, causing
+every step to show 200 occurrences (e.g., "Bat_Dau" → occurrence=200). In a real
+workflow, each step happens once per execution. Total events were 49,773 — unrealistically high.
+
+**Root cause:** Two issues combined:
+1. `traces_per_graph` default was 200, inflating all event counts
+2. The `/api/petri-net` endpoint mined a DFG (aggregating 200 traces), losing the
+   clean structural view — every node showed occurrence=200, every edge showed frequency=200
+
+**Fix:**
+1. Rewrote `/api/petri-net` to return the **process template graph directly** instead
+   of mining a DFG from event logs. Each node now appears exactly once with its
+   designed cost. Gateway nodes (ExclusiveGateway) are visible with ALL outgoing
+   branches shown — no information is lost from random trace sampling.
+2. Reduced default `traces_per_graph` from 200 → 10 (still configurable via API param).
+   This brings total events from ~49,773 to ~2,514 for 22 graphs.
+3. Updated frontend: removed edge frequency labels (all structural edges = 1), removed
+   frequency-proportional line thickness, cleaned node detail panel to show Cost and
+   Human Res instead of "Occurrences", added Gateway to the legend.
+
+**Files changed:**
+- `src/backend/routes/petri_net.py` — rewrote: reads template graphs directly, no event log needed
+- `src/backend/routes/generate_data.py` — default `traces_per_graph` 200 → 10
+- `fe/app/components/PetriNetViewer.tsx` — clean structural view, no frequency labels
+
+**Result:** G10 now shows 13 nodes (each once), 14 edges, total_cost=840, with visible
+gateway branching — matching the designed process template exactly.
+
+---
+
+### 2026-04-10 — Replaced repeated graph variants with 20 unique IT process templates
+
+**Problem:** `GraphGenerator` only varied cost/humanres on the SAME 2 base topologies.
+G3-G22 were copies of G1/G2 with different numbers — all 22 graphs had identical flow
+patterns (just 2 unique processes repeated 11 times each).
+
+**Fix:** Created `process_templates.py` with 20 genuinely unique IT process templates,
+each with different activities, topology, gateway patterns, and flow logic:
+
+| Graph | Process | Activities | Gateways |
+|-------|---------|-----------|----------|
+| G3 | CI/CD Pipeline | Commit, Build, Unit Test, Integration Test, Deploy | 2 (test gates + loop) |
+| G4 | Network Troubleshooting | Cảnh báo, Kiểm tra kết nối, Phân tích log | 1 (hardware vs software) |
+| G5 | User Access Management | Xác minh, Phê duyệt, Cấu hình quyền | 1 (accept/reject) |
+| G6 | Change Management (ITIL) | RFC, Đánh giá rủi ro, Họp CAB, Rollback | 2 (risk level + verify) |
+| G7 | Backup & Recovery | Sao lưu, Kiểm tra toàn vẹn, Lưu trữ offsite | 1 (integrity loop) |
+| G8 | Security Incident Response | Phát hiện, Forensic, Khắc phục lỗ hổng | 1 (severity level) |
+| G9 | Hardware Procurement | Duyệt ngân sách, Đặt hàng, Kiểm tra chất lượng | 2 (budget + quality) |
+| G10 | Software Release | Feature freeze, Regression test, UAT, Deploy | 2 (regression + UAT) |
+| G11 | Bug Tracking | Báo cáo lỗi, Sửa lỗi, Code review, QA | 2 (review + QA loops) |
+| G12 | Database Migration | Schema, Script, Test dev, Migrate, Rollback | 2 (test + data verify) |
+| G13 | Cloud Infrastructure | IaC Terraform, Apply, Network, Security | 1 (health check loop) |
+| G14 | Penetration Testing | Scan, Khai thác, Leo thang quyền | 1 (vulnerability found?) |
+| G15 | IT Onboarding | Email, Quyền, VPN, Đào tạo công cụ | 1 (training loop) |
+| G16 | Disaster Recovery | Đánh giá thiệt hại, DR site, Khôi phục | 2 (severity + verify) |
+| G17 | API Integration | Phân tích spec, Code, Test API, Deploy gateway | 1 (test loop) |
+| G18 | Performance Optimization | Monitoring, Bottleneck, Tối ưu, Load test | 2 (found? + improved?) |
+| G19 | Agile Sprint | Planning, User Story, Standup, Review, Retro | 1 (code review loop) |
+| G20 | IT Audit | Phạm vi, Bằng chứng, Phỏng vấn, Báo cáo | 1 (compliant vs violation) |
+| G21 | Microservices Development | API Contract, Docker, K8s, Service Mesh | 2 (unit test + mesh) |
+| G22 | ETL Data Pipeline | Extract, Transform, Validate, Load DW, BI | 1 (validation loop) |
+
+**Result:** 22 graphs with **178 unique activities**, 49,773 total events.
+Each graph produces a visually distinct DFG in the Petri Net viewer.
+
+**Files changed:**
+- `src/phase1_data_generation/process_templates.py` — **new file**: 20 unique process definitions
+- `src/phase1_data_generation/graph_generator.py` — rewritten to use diverse templates
+- Old event log deleted → user must click "Generate Data" to regenerate
+
+---
 
 ### 2026-04-10 — Rewrote Petri Net Viewer: DFG mining from event logs + scroll-zoom fix
 
@@ -316,16 +396,17 @@ in `graph_encoder.py` that provides the same interface (`ntypes`, `edges()`, `nu
 
 ## DATA SUMMARY
 
-| Metric               | Value                                   |
-| -------------------- | --------------------------------------- |
-| Base graphs          | 2 (G1: IT lifecycle, G2: Incident mgmt) |
-| Generated variants   | 20 (G3-G22)                             |
-| Total graphs         | 22                                      |
-| Traces per graph     | 200                                     |
-| Total traces/cases   | 4,400                                   |
-| Total events         | 64,408                                  |
-| Unique activities    | 20                                      |
-| Avg events per trace | ~14.6                                   |
+| Metric               | Value                                                  |
+| -------------------- | ------------------------------------------------------ |
+| Base graphs (CSV)    | 2 (G1: IT lifecycle, G2: Incident mgmt)                |
+| Template processes   | 20 unique IT workflows (G3-G22)                        |
+| Total graphs         | 22 (all with distinct topology and activities)         |
+| Traces per graph     | 10 (default, configurable via API)                     |
+| Total traces/cases   | 220                                                    |
+| Total events         | ~2,514                                                 |
+| Unique activities    | 176                                                    |
+| Avg events per trace | ~11.4                                                  |
+| IT domains covered   | CI/CD, Security, Network, Cloud, Data, Agile, Audit... |
 
 ---
 

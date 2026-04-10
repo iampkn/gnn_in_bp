@@ -12,7 +12,7 @@ router = APIRouter()
 @router.post("/generate-data")
 async def generate_data(
     num_variants: int = 20,
-    traces_per_graph: int = 200,
+    traces_per_graph: int = 10,
     seed: int = 42,
 ):
     """Run Phase 1: generate graph variants and simulate event logs."""

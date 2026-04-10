@@ -22,11 +22,11 @@ Dự án nhằm mục tiêu xây dựng một hệ thống Khám phá Quy trình
 
 **Nhiệm vụ:**
 
-1.  **Đọc và mở rộng dữ liệu:** Viết script Python đọc cấu trúc đồ thị cơ sở từ các file `node.csv`, `edge.csv`, `human.csv`, `device.csv`.
-2.  **Sinh tự động 20 quy trình IT:** Dựa trên cấu trúc mẫu (ví dụ: `Bat_Dau -> Nhan_Task... -> Ket_Thuc`), sinh ngẫu nhiên khoảng 20 biến thể đồ thị quy trình IT với các node thuộc tính thay đổi về `Cost`, `HumanRes`, `Role`, `DeviceType`.
+1.  **Đọc dữ liệu gốc:** Viết script Python đọc cấu trúc đồ thị cơ sở G1, G2 từ các file `node.csv`, `edge.csv`, `human.csv`, `device.csv`.
+2.  **Sinh tự động 20 quy trình IT có logic khác nhau:** ✅ Đã tạo file `process_templates.py` định nghĩa 20 quy trình IT độc lập (G3-G22), mỗi quy trình có topology, activities, gateway patterns khác nhau hoàn toàn. Bao gồm: CI/CD Pipeline, Xử lý sự cố mạng, Quản lý quyền truy cập, Change Management ITIL, Backup & Recovery, Ứng phó bảo mật, Mua sắm phần cứng, Phát hành phần mềm, Bug Tracking, Database Migration, Cloud Infrastructure, Pentest, IT Onboarding, Disaster Recovery, API Integration, Performance Optimization, Agile Sprint, IT Audit, Microservices, ETL Pipeline. Tổng cộng 178 unique activities.
 3.  **Mô phỏng Nhật ký sự kiện (Event Logs):**
-    - Chạy mô phỏng (simulation) trên 20 đồ thị này để tạo ra tập dữ liệu nhật ký sự kiện dạng `Event Logs $L$` chứa nhiều chuỗi thực thi (traces).
-    - Lưu ý xử lý các node rẽ nhánh (`ExclusiveGateway`) để sinh ra các luồng (traces) khác nhau.
+    - Chạy mô phỏng (simulation) trên 22 đồ thị để tạo ra tập dữ liệu nhật ký sự kiện dạng `Event Logs $L$` chứa nhiều chuỗi thực thi (traces). Mặc định 10 traces/graph (tùy chỉnh qua API parameter `traces_per_graph`). Tổng ~2,500 events cho 22 graphs.
+    - Các node `ExclusiveGateway` tạo ra các luồng (traces) khác nhau với xác suất lặp giảm dần.
 
 ### PHASE 2: Tích hợp Vector Database
 
@@ -85,8 +85,8 @@ Tại điểm cuối của mạng (sau khi kiến trúc Petri Net được xác 
 1.  **API `/generate-data`**: Chạy tập script ở Phase 1. Trả về bảng danh sách Event Logs.
 2.  **API `/search-vector`**: Truy vấn Vector DB để tìm các "Task" giống nhau (Ví dụ: tìm các tác vụ có "Cost > 100" và thuộc "Graph G1").
 3.  **API `/discover-process`**: Upload Event Log $\rightarrow$ Chạy Inference với mô hình GNN $\rightarrow$ Trả về JSON chứa cấu trúc Petri Net và thông tin dự báo chi phí tối ưu.
-4.  **API `/petri-net`**: Khai thác Directly-Follows Graph (DFG) từ `event_log_all.csv` cho Graph ID đã chọn. Trả về nodes (activities với avg cost, occurrence count), edges (với frequency count), layout positions. Mỗi graph có pattern thực thi khác nhau vì gateway choices khác nhau trong mỗi trace.
-5.  **UI Component**: ✅ Hiển thị DFG trực quan bằng SVG (interactive: zoom, pan, click node). Edge hiển thị frequency label và độ dày tỷ lệ thuận với tần suất. Zoom sử dụng native `wheel` event listener (`passive: false`, dependency `[data]`) để attach sau khi SVG render xong và không conflict với browser scroll.
+4.  **API `/petri-net`**: Trả về cấu trúc đồ thị quy trình (template graph) cho Graph ID đã chọn. Mỗi node hiển thị đúng 1 lần với cost, human_res gốc. Gateway nodes hiển thị với tất cả nhánh rẽ. Không cần event log — đọc trực tiếp từ template graphs (G1-G2 từ CSV, G3-G22 từ `process_templates.py`).
+5.  **UI Component**: ✅ Hiển thị cấu trúc quy trình trực quan bằng SVG (interactive: zoom, pan, click node). Mỗi bước chỉ xuất hiện 1 lần, gateway hiển thị đầy đủ nhánh rẽ. Zoom sử dụng native `wheel` event listener (`passive: false`, dependency `[data]`). Node detail panel hiển thị Cost và Human Res.
 
 ---
 

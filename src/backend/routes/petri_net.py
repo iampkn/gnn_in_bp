@@ -1,11 +1,10 @@
-"""API route: /petri-net - Mine a Directly-Follows Graph from event logs."""
+"""API route: /petri-net - Return process template graph structure for visualization."""
 from __future__ import annotations
 
-from collections import defaultdict, deque
+from collections import deque
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
@@ -15,64 +14,15 @@ LAYER_GAP_X = 220
 LAYER_GAP_Y = 100
 
 
-def _mine_dfg(df: pd.DataFrame) -> Tuple[
-    Dict[str, dict],
-    List[dict],
-    float,
-]:
-    """Mine a Directly-Follows Graph from an event log DataFrame.
-
-    Returns (nodes_dict, edges_list, total_cost).
-    """
-    df = df.sort_values(["case:concept:name", "time:timestamp"])
-
-    activity_stats: Dict[str, dict] = defaultdict(
-        lambda: {"count": 0, "total_cost": 0.0, "node_type": "Task"}
-    )
-    dfg_counts: Dict[Tuple[str, str], int] = defaultdict(int)
-
-    for _case_id, grp in df.groupby("case:concept:name"):
-        acts = list(grp["concept:name"])
-        costs = list(grp["cost"])
-        node_types = list(grp["node_type"])
-
-        for act, cost, ntype in zip(acts, costs, node_types):
-            s = activity_stats[act]
-            s["count"] += 1
-            s["total_cost"] += cost
-            s["node_type"] = ntype
-
-        for a, b in zip(acts, acts[1:]):
-            dfg_counts[(a, b)] += 1
-
-    nodes: Dict[str, dict] = {}
-    for i, (act, stats) in enumerate(activity_stats.items()):
-        nodes[act] = {
-            "id": act,
-            "label": act,
-            "type": stats["node_type"],
-            "cost": round(stats["total_cost"] / max(stats["count"], 1), 2),
-            "human_res": stats["count"],
-            "occurrence": stats["count"],
-        }
-
-    edges = []
-    for (src, tgt), freq in dfg_counts.items():
-        edges.append({"source": src, "target": tgt, "frequency": freq})
-
-    total_cost = sum(s["total_cost"] for s in activity_stats.values())
-    return nodes, edges, round(total_cost, 2)
-
-
 def _compute_layered_layout(
     nodes: Dict[str, dict],
-    edges: List[dict],
+    edges: List[Tuple[str, str]],
 ) -> Dict[str, Tuple[float, float]]:
-    """BFS-layered layout from the StartEvent node."""
+    """BFS-layered layout starting from the StartEvent node."""
     adj: Dict[str, List[str]] = {nid: [] for nid in nodes}
-    for e in edges:
-        if e["source"] in adj:
-            adj[e["source"]].append(e["target"])
+    for src, tgt in edges:
+        if src in adj:
+            adj[src].append(tgt)
 
     start = next(
         (nid for nid, n in nodes.items() if n["type"] == "StartEvent"), None
@@ -114,48 +64,64 @@ def _compute_layered_layout(
 async def get_petri_net(
     graph_id: str = Query(..., description="Graph ID (e.g. G1, G2)"),
 ):
-    """Mine a Directly-Follows Graph from event logs for the given graph."""
+    """Return process template graph structure with layout positions."""
     try:
+        from src.phase1_data_generation.graph_reader import GraphReader
+        from src.phase1_data_generation.graph_generator import GraphGenerator
+
         project_root = Path(__file__).resolve().parent.parent.parent.parent
-        csv_path = project_root / "src" / "data" / "generated" / "event_log_all.csv"
+        data_dir = project_root / "src" / "data" / "csv"
 
-        if not csv_path.exists():
-            raise HTTPException(
-                status_code=404,
-                detail="Event log not found. Run /api/generate-data first.",
-            )
+        if not data_dir.exists():
+            raise HTTPException(status_code=404, detail="Data directory not found")
 
-        full_df = pd.read_csv(csv_path)
-        available = sorted(
-            full_df["graph_id"].unique().tolist(),
-            key=lambda g: int(g[1:]),
-        )
+        reader = GraphReader(data_dir)
+        base_graphs = reader.read_all()
 
-        if graph_id not in available:
+        generator = GraphGenerator(seed=42)
+        template_graphs = generator.generate_variants(base_graphs, num_variants=20)
+        graphs = {**base_graphs, **template_graphs}
+
+        if graph_id not in graphs:
+            available = sorted(graphs.keys(), key=lambda g: int(g[1:]))
             raise HTTPException(
                 status_code=404,
                 detail=f"Graph '{graph_id}' not found. Available: {available}",
             )
 
-        gdf = full_df[full_df["graph_id"] == graph_id]
-        nodes_dict, edges_list, total_cost = _mine_dfg(gdf)
-        positions = _compute_layered_layout(nodes_dict, edges_list)
+        pg = graphs[graph_id]
+
+        nodes_dict: Dict[str, dict] = {}
+        for nid, node in pg.nodes.items():
+            nodes_dict[nid] = {
+                "id": nid,
+                "label": node.label,
+                "type": node.node_type,
+                "cost": node.cost,
+                "human_res": node.human_res,
+            }
+
+        edge_tuples = [(e.source, e.target) for e in pg.edges]
+        positions = _compute_layered_layout(nodes_dict, edge_tuples)
 
         nodes_out = []
         for nid, info in nodes_dict.items():
             x, y = positions.get(nid, (0, 0))
             nodes_out.append({**info, "x": x, "y": y})
 
-        case_count = int(gdf["case:concept:name"].nunique())
+        edges_out = [
+            {"source": src, "target": tgt, "frequency": 1}
+            for src, tgt in edge_tuples
+        ]
 
         return JSONResponse(
             content={
                 "graph_id": graph_id,
-                "total_cost": total_cost,
-                "case_count": case_count,
+                "total_cost": pg.total_cost(),
+                "case_count": 1,
                 "nodes": nodes_out,
-                "edges": edges_list,
-                "available_graphs": available,
+                "edges": edges_out,
+                "available_graphs": sorted(graphs.keys(), key=lambda g: int(g[1:])),
             }
         )
 

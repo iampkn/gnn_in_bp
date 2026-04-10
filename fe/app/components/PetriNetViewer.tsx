@@ -178,11 +178,9 @@ function NodeShape({ node, selected, onSelect }: {
 function EdgeArrow({
   edge,
   nodes,
-  maxFreq,
 }: {
   edge: PetriNetEdge;
   nodes: PetriNetNode[];
-  maxFreq: number;
 }) {
   const src = nodes.find((n) => n.id === edge.source);
   const tgt = nodes.find((n) => n.id === edge.target);
@@ -193,47 +191,16 @@ function EdgeArrow({
   const p1 = nodeBorderPoint(src, tgtC.cx, tgtC.cy);
   const p2 = nodeBorderPoint(tgt, srcC.cx, srcC.cy);
 
-  const ratio = maxFreq > 0 ? edge.frequency / maxFreq : 0.5;
-  const strokeW = 1 + ratio * 4;
-  const opacity = 0.3 + ratio * 0.7;
-
-  const mx = (p1.x + p2.x) / 2;
-  const my = (p1.y + p2.y) / 2;
-
   return (
-    <g>
-      <line
-        x1={p1.x}
-        y1={p1.y}
-        x2={p2.x}
-        y2={p2.y}
-        stroke="#64748b"
-        strokeWidth={strokeW}
-        strokeOpacity={opacity}
-        markerEnd="url(#arrowhead)"
-      />
-      <rect
-        x={mx - 14}
-        y={my - 9}
-        width={28}
-        height={18}
-        rx={4}
-        fill="white"
-        fillOpacity={0.85}
-        stroke="#cbd5e1"
-        strokeWidth={0.5}
-      />
-      <text
-        x={mx}
-        y={my + 1}
-        textAnchor="middle"
-        dominantBaseline="central"
-        className="text-[9px] font-semibold select-none pointer-events-none"
-        fill="#475569"
-      >
-        {edge.frequency}
-      </text>
-    </g>
+    <line
+      x1={p1.x}
+      y1={p1.y}
+      x2={p2.x}
+      y2={p2.y}
+      stroke="#64748b"
+      strokeWidth={1.8}
+      markerEnd="url(#arrowhead)"
+    />
   );
 }
 
@@ -315,7 +282,7 @@ export default function PetriNetViewer() {
           Petri Net Viewer
         </h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Directly-Follows Graph mined from event log traces. Edge labels show transition frequency.
+          Process template structure. Each node represents one step in the workflow.
         </p>
       </div>
 
@@ -342,21 +309,15 @@ export default function PetriNetViewer() {
             <div className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
               <span>
                 <strong className="text-zinc-700 dark:text-zinc-200">
-                  {data.case_count}
-                </strong>{" "}
-                traces
-              </span>
-              <span>
-                <strong className="text-zinc-700 dark:text-zinc-200">
                   {data.nodes.length}
                 </strong>{" "}
-                activities
+                nodes
               </span>
               <span>
                 <strong className="text-zinc-700 dark:text-zinc-200">
                   {data.edges.length}
                 </strong>{" "}
-                flows
+                edges
               </span>
               <span>
                 Total cost:{" "}
@@ -424,12 +385,9 @@ export default function PetriNetViewer() {
                 </marker>
               </defs>
               <g transform={`translate(${pan.x * zoom + 40}, ${250 + pan.y * zoom}) scale(${zoom})`}>
-                {(() => {
-                  const maxF = Math.max(...data.edges.map((e) => e.frequency), 1);
-                  return data.edges.map((e, i) => (
-                    <EdgeArrow key={i} edge={e} nodes={data.nodes} maxFreq={maxF} />
-                  ));
-                })()}
+                {data.edges.map((e, i) => (
+                  <EdgeArrow key={i} edge={e} nodes={data.nodes} />
+                ))}
                 {data.nodes.map((n) => (
                   <NodeShape
                     key={n.id}
@@ -450,8 +408,8 @@ export default function PetriNetViewer() {
                   {[
                     { label: "Activity", value: selectedInfo.label.replace(/_/g, " ") },
                     { label: "Type", value: selectedInfo.type },
-                    { label: "Avg Cost", value: selectedInfo.cost },
-                    { label: "Occurrences", value: selectedInfo.human_res },
+                    { label: "Cost", value: selectedInfo.cost },
+                    { label: "Human Res", value: selectedInfo.human_res },
                   ].map((item) => (
                     <div key={item.label}>
                       <dt className="text-zinc-500 dark:text-zinc-400 text-xs">
@@ -489,9 +447,12 @@ export default function PetriNetViewer() {
           End
         </span>
         <span className="flex items-center gap-1.5">
+          <span className="inline-block w-4 h-4 rotate-45 bg-yellow-100 border-2 border-yellow-600" />
+          Gateway
+        </span>
+        <span className="flex items-center gap-1.5">
           <span className="inline-block w-6 h-0.5 bg-slate-500" />
-          <span className="text-[10px] bg-white border border-slate-300 px-1 rounded">n</span>
-          Flow (frequency)
+          Flow
         </span>
         <span className="text-zinc-400 dark:text-zinc-600 ml-2">
           Scroll to zoom &middot; Drag to pan &middot; Click node for details
