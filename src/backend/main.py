@@ -5,8 +5,10 @@ Provides REST APIs for the process discovery system:
   - /search-vector: Query Vector DB for similar tasks
   - /discover-process: Upload event log -> GNN inference -> Petri net
 """
+
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -16,7 +18,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .routes import generate_data, search_vector, discover_process
+from src.backend.routes import generate_data, search_vector, discover_process
 
 app = FastAPI(
     title="GNN Process Discovery API",
@@ -24,9 +26,13 @@ app = FastAPI(
     version="0.1.0",
 )
 
+cors_origins = os.environ.get(
+    "CORS_ORIGINS", "http://localhost:3000,http://localhost:3001"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

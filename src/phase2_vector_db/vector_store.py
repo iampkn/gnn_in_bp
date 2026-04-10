@@ -4,6 +4,7 @@ Stores event/resource/device feature vectors for similarity search.
 """
 from __future__ import annotations
 
+import os
 from typing import Dict, List, Optional
 import numpy as np
 
@@ -14,9 +15,9 @@ class VectorStore:
     Falls back to in-memory numpy-based search if Qdrant is unavailable.
     """
 
-    def __init__(self, host: str = "localhost", port: int = 6333):
-        self.host = host
-        self.port = port
+    def __init__(self, host: str | None = None, port: int | None = None):
+        self.host = host or os.environ.get("QDRANT_HOST", "localhost")
+        self.port = port or int(os.environ.get("QDRANT_PORT", "6333"))
         self.client = None
         self._memory_store: Dict[str, List[dict]] = {}
         self._try_connect()
@@ -34,7 +35,9 @@ class VectorStore:
     def create_collection(self, name: str, vector_size: int):
         if self.client:
             from qdrant_client.models import Distance, VectorParams
-            self.client.recreate_collection(
+            if self.client.collection_exists(name):
+                self.client.delete_collection(name)
+            self.client.create_collection(
                 collection_name=name,
                 vectors_config=VectorParams(
                     size=vector_size, distance=Distance.COSINE
@@ -71,14 +74,14 @@ class VectorStore:
             query_vector = query_vector.tolist()
 
         if self.client:
-            results = self.client.search(
+            response = self.client.query_points(
                 collection_name=collection,
-                query_vector=query_vector,
+                query=query_vector,
                 limit=top_k,
             )
             return [
                 {"id": r.id, "score": r.score, "payload": r.payload}
-                for r in results
+                for r in response.points
             ]
         else:
             return self._memory_search(collection, query_vector, top_k, filters)

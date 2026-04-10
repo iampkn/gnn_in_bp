@@ -1,0 +1,14 @@
+fe/
+.git/
+.agents/
+paper/
+__pycache__/
+*.pyc
+.env
+.env.*
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

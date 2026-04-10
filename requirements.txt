@@ -1,5 +1,5 @@
-torch>=2.0.0
-dgl>=1.1.0
+torch>=2.4.0
+dgl>=2.4.0
 pandas>=2.0.0
 numpy>=1.24.0
 pm4py>=2.7.0
