@@ -15,8 +15,6 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import dgl
-from dgl.nn.pytorch import GATConv
 
 
 class PropagationLayer(nn.Module):

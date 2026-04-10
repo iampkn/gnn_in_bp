@@ -1,4 +1,4 @@
-from .graph_encoder import DiscoveryGraphEncoder, AlphaRelations
+from .graph_encoder import DiscoveryGraphEncoder, AlphaRelations, HeteroGraphData
 from .propagation_net import PropagationNetwork, build_pn1, build_pn2
 from .select_candidate import SelectCandidateNetwork
 from .stop_network import StopNetwork

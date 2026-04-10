@@ -2,7 +2,7 @@
 
 ## GNN Process Discovery (Khám phá Quy trình bằng Graph Neural Networks)
 
-**Last Updated:** 2026-04-10
+**Last Updated:** 2026-04-10 (v2)
 
 ---
 
@@ -18,7 +18,7 @@ Do_An/
 ├── docker-compose.yml                      # ✅ Docker Compose (FE + BE + Qdrant)
 ├── Dockerfile                              # ✅ Backend Docker image (Python 3.12)
 ├── .dockerignore                           # ✅ Backend Docker ignore rules
-├── requirements.txt                        # Python dependencies
+├── requirements.txt                        # Python dependencies (DGL-free, pure PyTorch)
 ├── fe/                                     # ✅ NextJS Frontend (Phase 5)
 │   ├── Dockerfile                          # ✅ Frontend Docker image (Node 22, standalone)
 │   ├── .dockerignore                       # ✅ Frontend Docker ignore rules
@@ -56,11 +56,11 @@ Do_An/
 │   │   ├── __init__.py
 │   │   ├── feature_extractor.py            # One-hot + freq + Cost + HumanRes vectors
 │   │   └── vector_store.py                 # ✅ Qdrant client (env-var host) + in-memory fallback
-│   ├── phase3_gnn/                         # ✅ PHASE 3: IMPLEMENTED
+│   ├── phase3_gnn/                         # ✅ PHASE 3: IMPLEMENTED (DGL-free)
 │   │   ├── __init__.py
 │   │   ├── graph_encoder.py                # Encode L -> G (trace graph + candidate Petri net)
 │   │   │                                   #   AlphaRelations, candidate place generation
-│   │   │                                   #   DGL heterograph with event/transition/place nodes
+│   │   │                                   #   HeteroGraphData (pure-Python, replaces DGL)
 │   │   ├── propagation_net.py              # PN1 (4-layer GCN+attention) & PN2 (2-layer)
 │   │   │                                   #   Eq.(1)(2): bi-directional, K-head attention, RELU
 │   │   ├── select_candidate.py             # SCN: single FC layer + SOFTMAX (Eq.3,4)
@@ -124,6 +124,12 @@ Do_An/
     - **SN:** 2-layer with SIGMOID gating → Eq.(5)(6) with workflow net check
     - **PN2:** 2-layer GCN with K-head attention
 - **Graph Encoding:** Alpha-relations for candidate place pruning (Appendix A)
+- **Graph Data Structure:** `HeteroGraphData` — lightweight pure-Python heterogeneous graph
+    - ✅ Replaced DGL dependency (was causing `torchdata.datapipes`, `libcurl.so.4`,
+      `graphbolt` version mismatch errors in Docker)
+    - Implements same interface: `ntypes`, `canonical_etypes`, `num_nodes()`,
+      `nodes[ntype].data`, `edges(etype=...)`
+    - All GNN layers (PN1/PN2) are pure PyTorch — DGL was only used as a data container
 - **Training:** NLL loss (Eq.7), teacher forcing with BFS ordering
 - **Inference:** Beam search (configurable width)
 - **TODO:** Train model on generated data, evaluate with conformance metrics
@@ -152,9 +158,9 @@ Do_An/
     - Integrate graph visualization library (React Flow / D3.js) for Petri net rendering
     - Display cost predictions from regression head
 
-### Phase 6: Docker Deployment ✅ IMPLEMENTED
+### Phase 6: Docker Deployment ✅ IMPLEMENTED & VERIFIED
 
-- **Status:** Full Docker Compose stack with 3 services
+- **Status:** Full Docker Compose stack with 3 services, all endpoints tested
 - **Services:**
     | Service    | Image                    | Port | Description                        |
     | ---------- | ------------------------ | ---- | ---------------------------------- |
@@ -192,6 +198,38 @@ Do_An/
 - **Volumes:**
     - `qdrant_data` — persistent Qdrant storage
     - `./src/data` → `/app/src/data` — shared data directory (CSV + generated)
+
+---
+
+## CHANGE LOG
+
+### 2026-04-10 — Removed DGL dependency, fixed Docker runtime errors
+
+**Problem:** `POST /api/discover-process` returned 500 errors inside Docker:
+1. `No module named 'torchdata.datapipes'` — DGL 2.1.0 (PyPI) imported deprecated torchdata module
+2. `libcurl.so.4: cannot open shared object file` — DGL runtime dependency missing in slim image
+3. `Cannot find DGL C++ graphbolt library ...pytorch_2.11.0.so` — DGL 2.1.0 incompatible with torch 2.11.0
+
+**Root cause:** DGL on PyPI is stuck at v2.1.0, which has hard dependencies on
+`torchdata.datapipes` (removed in torchdata ≥0.9), `libcurl`, and torch-version-specific
+C++ graphbolt `.so` files. These create cascading failures with modern PyTorch (≥2.4).
+
+**Fix:** Replaced DGL entirely with `HeteroGraphData` — a lightweight pure-Python class
+in `graph_encoder.py` that provides the same interface (`ntypes`, `edges()`, `num_nodes()`,
+`nodes[ntype].data`). This was safe because:
+- All GNN layers (PN1, PN2, SCN, SN) were already pure PyTorch
+- DGL was only used as a data container via `dgl.heterograph()`
+- Removed unused `import dgl` / `from dgl.nn.pytorch import GATConv` in `propagation_net.py`
+
+**Files changed:**
+- `src/phase3_gnn/graph_encoder.py` — added `HeteroGraphData` class, removed `import dgl`
+- `src/phase3_gnn/propagation_net.py` — removed unused `import dgl` and `GATConv` import
+- `src/phase3_gnn/__init__.py` — exported `HeteroGraphData`
+- `requirements.txt` — removed `dgl`, `torchdata`, `pyyaml` (DGL deps)
+- `Dockerfile` — removed `DGLBACKEND=pytorch` env var
+
+**Verified:** `POST /api/discover-process?graph_id=G1&beam_width=10` returns 200 OK with
+5 ranked Petri net candidates (12 activities, 153 candidate places, 200 traces).
 
 ---
 

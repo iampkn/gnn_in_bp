@@ -1,5 +1,5 @@
 """
-Encode the process discovery problem as a DGL graph G.
+Encode the process discovery problem as a heterogeneous graph G.
 G contains three parts (per the paper, Section III-B):
   1. Trace graph: event nodes from the event log
   2. Candidate Petri net: transitions + candidate places with arcs
@@ -10,13 +10,83 @@ Uses alpha-relations to prune candidate places (Appendix A of the paper).
 from __future__ import annotations
 
 import itertools
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from typing import Dict, List, Optional, Set, Tuple
 
-import dgl
 import torch
 import numpy as np
 import pandas as pd
+
+
+class _NodeTypeView:
+    """Accessor for per-node-type feature data (mirrors g.nodes[ntype].data)."""
+
+    def __init__(self):
+        self.data: Dict[str, torch.Tensor] = {}
+
+
+class HeteroGraphData:
+    """
+    Lightweight replacement for dgl.heterograph that stores node types,
+    edge types, node counts, edge index pairs, and per-node-type feature dicts.
+
+    Provides the same read/write interface used by the project:
+        g.ntypes, g.canonical_etypes, g.num_nodes(ntype),
+        g.nodes[ntype].data["h"], g.edges(etype=...)
+    """
+
+    def __init__(
+        self,
+        edge_dict: Dict[Tuple[str, str, str], Tuple[torch.Tensor, torch.Tensor]],
+        num_nodes_dict: Optional[Dict[str, int]] = None,
+    ):
+        self._edge_dict = OrderedDict(edge_dict)
+
+        inferred: Dict[str, int] = {}
+        for (src_t, _, dst_t), (src_idx, dst_idx) in self._edge_dict.items():
+            if len(src_idx) > 0:
+                inferred[src_t] = max(inferred.get(src_t, 0), int(src_idx.max()) + 1)
+            else:
+                inferred.setdefault(src_t, 0)
+            if len(dst_idx) > 0:
+                inferred[dst_t] = max(inferred.get(dst_t, 0), int(dst_idx.max()) + 1)
+            else:
+                inferred.setdefault(dst_t, 0)
+
+        if num_nodes_dict:
+            for k, v in num_nodes_dict.items():
+                inferred[k] = max(inferred.get(k, 0), v)
+
+        self._num_nodes: Dict[str, int] = OrderedDict()
+        seen_order: List[str] = []
+        for (src_t, _, dst_t) in self._edge_dict:
+            for t in (src_t, dst_t):
+                if t not in self._num_nodes:
+                    self._num_nodes[t] = inferred.get(t, 0)
+                    seen_order.append(t)
+
+        self._node_views: Dict[str, _NodeTypeView] = {
+            t: _NodeTypeView() for t in self._num_nodes
+        }
+
+    @property
+    def ntypes(self) -> List[str]:
+        return list(self._num_nodes.keys())
+
+    @property
+    def canonical_etypes(self) -> List[Tuple[str, str, str]]:
+        return list(self._edge_dict.keys())
+
+    def num_nodes(self, ntype: str) -> int:
+        return self._num_nodes.get(ntype, 0)
+
+    @property
+    def nodes(self):
+        return self._node_views
+
+    def edges(self, etype: Tuple[str, str, str]):
+        src, dst = self._edge_dict[etype]
+        return src, dst
 
 
 class AlphaRelations:
@@ -217,18 +287,23 @@ class DiscoveryGraphEncoder:
                 torch.tensor([0]),
             )
 
-        g = dgl.heterograph(graph_data)
+        num_nodes_dict = {
+            "event": len(event_nodes),
+            "transition": len(transition_nodes),
+            "place": len(place_nodes),
+        }
+        g = HeteroGraphData(graph_data, num_nodes_dict=num_nodes_dict)
 
         feature_dim = num_activities + 1
         if len(event_features) > 0:
             g.nodes["event"].data["h"] = torch.tensor(
                 np.array(event_features), dtype=torch.float32
             )
-        if len(transition_features) > 0 and "transition" in g.ntypes:
+        if len(transition_features) > 0 and "transition" in g.nodes:
             g.nodes["transition"].data["h"] = torch.tensor(
                 np.array(transition_features), dtype=torch.float32
             )
-        if len(place_features) > 0 and "place" in g.ntypes:
+        if len(place_features) > 0 and "place" in g.nodes:
             g.nodes["place"].data["h"] = torch.tensor(
                 np.array(place_features), dtype=torch.float32
             )
