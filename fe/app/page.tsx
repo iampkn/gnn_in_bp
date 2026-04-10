@@ -4,12 +4,14 @@ import { useState, useEffect } from "react";
 import GenerateData from "./components/GenerateData";
 import SearchVector from "./components/SearchVector";
 import DiscoverProcess from "./components/DiscoverProcess";
+import PetriNetViewer from "./components/PetriNetViewer";
 import { healthCheck } from "./lib/api";
 
 const tabs = [
   { id: "generate" as const, label: "Generate Data" },
   { id: "search" as const, label: "Vector Search" },
   { id: "discover" as const, label: "Process Discovery" },
+  { id: "petri" as const, label: "Petri Net" },
 ];
 
 type TabId = (typeof tabs)[number]["id"];
@@ -83,6 +85,7 @@ export default function Home() {
         {activeTab === "generate" && <GenerateData />}
         {activeTab === "search" && <SearchVector />}
         {activeTab === "discover" && <DiscoverProcess />}
+        {activeTab === "petri" && <PetriNetViewer />}
       </main>
     </div>
   );

@@ -2,7 +2,7 @@
 
 ## GNN Process Discovery (Khám phá Quy trình bằng Graph Neural Networks)
 
-**Last Updated:** 2026-04-10 (v2)
+**Last Updated:** 2026-04-10 (v5)
 
 ---
 
@@ -28,11 +28,12 @@ Do_An/
 │   │   ├── layout.tsx                      # Root layout with Geist fonts
 │   │   ├── globals.css                     # Tailwind v4 + CSS vars
 │   │   ├── lib/
-│   │   │   └── api.ts                      # ✅ Typed API client (all 3 endpoints + health)
+│   │   │   └── api.ts                      # ✅ Typed API client (all 4 endpoints + health)
 │   │   └── components/
 │   │       ├── GenerateData.tsx            # ✅ Data generation form + results table
 │   │       ├── SearchVector.tsx            # ✅ Vector search form + result cards
-│   │       └── DiscoverProcess.tsx         # ✅ Discovery form + Petri net display
+│   │       ├── DiscoverProcess.tsx         # ✅ Discovery form + Petri net display
+│   │       └── PetriNetViewer.tsx          # ✅ Interactive DFG visualization (mined from event logs)
 │   ├── package.json                        # Next 16.2.3, React 19.2.4
 │   └── ...
 ├── src/
@@ -85,7 +86,8 @@ Do_An/
 │           ├── __init__.py
 │           ├── generate_data.py            # POST /api/generate-data
 │           ├── search_vector.py            # GET  /api/search-vector
-│           └── discover_process.py         # POST /api/discover-process
+│           ├── discover_process.py         # POST /api/discover-process
+│           └── petri_net.py               # GET  /api/petri-net (DFG mined from event logs)
 ```
 
 ---
@@ -142,20 +144,29 @@ Do_An/
 
 ### Phase 5: Web Interface ✅ IMPLEMENTED
 
-- **Backend:** FastAPI with 3 API routes
+- **Backend:** FastAPI with 4 API routes
     - `POST /api/generate-data` → Run Phase 1 pipeline
     - `GET  /api/search-vector` → Query similar tasks via Qdrant
     - `POST /api/discover-process` → GNN inference → Petri net JSON
+    - `GET  /api/petri-net?graph_id=G1` → Mine DFG from event logs with edge frequencies
     - ✅ CORS origins configurable via `CORS_ORIGINS` env var
 - **Frontend:** NextJS 16 interactive dashboard in `fe/`
-    - ✅ Tabbed dashboard UI with backend health check indicator
+    - ✅ Tabbed dashboard UI (4 tabs) with backend health check indicator
     - ✅ **Generate Data** tab: configure variants/traces/seed, view summary stats + per-graph table
     - ✅ **Vector Search** tab: search by activity/graph_id/min_cost, view scored result cards
     - ✅ **Process Discovery** tab: select graph_id or upload CSV, view Petri net structure
+    - ✅ **Petri Net** tab: interactive Directly-Follows Graph (DFG) visualization
+        - Mines process model from event log traces (not static templates)
+        - Each graph shows unique execution frequencies and flow patterns
+        - Edge labels show transition frequency, line thickness proportional to frequency
+        - BFS-layered layout: circles (Start/End), rectangles (Activity)
+        - Zoom (native wheel listener, `passive: false`) + Pan (drag) controls
+        - Click any node for details (activity, type, avg cost, occurrences)
+        - Summary bar: trace count, activity count, flow count, total cost
+        - Legend with node type + frequency explanation
     - ✅ Typed API client (`fe/app/lib/api.ts`) with full error handling
     - ✅ Dark mode support via Tailwind CSS
 - **TODO:**
-    - Integrate graph visualization library (React Flow / D3.js) for Petri net rendering
     - Display cost predictions from regression head
 
 ### Phase 6: Docker Deployment ✅ IMPLEMENTED & VERIFIED
@@ -203,6 +214,67 @@ Do_An/
 
 ## CHANGE LOG
 
+### 2026-04-10 — Rewrote Petri Net Viewer: DFG mining from event logs + scroll-zoom fix
+
+**Bug 1: Scroll zoom not working — browser page scrolled instead**
+- The `useEffect` for the native wheel listener had `[]` dependency, meaning it ran
+  on mount when `loading=true` and the SVG wasn't rendered yet (`svgRef.current === null`)
+- Fix: added `data` to the dependency array so the listener attaches after data loads
+  and the SVG is actually in the DOM. Also added `e.stopPropagation()`.
+
+**Bug 2: All graphs showed identical topology (only cost differences)**
+- The old endpoint read static template graphs from `node.csv`/`edge.csv` and used
+  `GraphGenerator` to create variants — but variants only differ in cost/humanres,
+  the topology (nodes + edges) was always identical to G1 or G2.
+- Fix: completely rewrote `/api/petri-net` to **mine a Directly-Follows Graph (DFG)**
+  from `event_log_all.csv`. Now:
+  - Reads event log, filters by `graph_id`
+  - Extracts traces per case and builds a DFG: activities = nodes, sequential pairs = edges
+  - Each edge carries a `frequency` count showing how many times that transition occurred
+  - Node `cost` is the average cost per occurrence, `occurrence` shows total event count
+  - Each graph shows genuinely different patterns because gateway choices vary per trace
+- Frontend updated: edge thickness proportional to frequency, frequency labels on edges,
+  summary shows trace count / activity count / flow count
+
+**Example frequency differences (all from same base topology G1):**
+- G1: Coding→Kiem_Thu_UAT=479, Rollback=163, total_cost=663,650
+- G3: Coding→Kiem_Thu_UAT=471, Rollback=155, total_cost=700,779
+- G5: Coding→Kiem_Thu_UAT=473, Rollback=164, total_cost=671,066
+
+**Files changed:**
+- `src/backend/routes/petri_net.py` — complete rewrite: DFG mining from event logs
+- `fe/app/components/PetriNetViewer.tsx` — edge frequency display, scroll-zoom fix
+- `fe/app/lib/api.ts` — added `frequency` to `PetriNetEdge`, `case_count` to result
+
+---
+
+### 2026-04-10 — Added interactive Petri Net Viewer tab
+
+**Feature:** New "Petri Net" tab in the dashboard for visualizing process graphs.
+
+**Backend:** `GET /api/petri-net?graph_id=G1` endpoint in `petri_net.py`
+- Reads graph structure from `node.csv` / `edge.csv` via `GraphReader`
+- Computes BFS-layered layout (x,y positions for each node)
+- Returns nodes (with positions, types, costs) + edges + available graph IDs
+
+**Frontend:** `PetriNetViewer.tsx` — interactive SVG component
+- Graph selection dropdown (auto-populates from backend)
+- Proper Petri net notation: circles (Start/End), rounded rectangles (Task), diamonds (Gateway)
+- Directed edges with arrowheads, edge routing from/to node borders
+- Zoom (scroll wheel), pan (click-drag), node click for detail panel
+- Summary bar with node count, edge count, total cost
+- Legend explaining node type colors
+
+**Files added/changed:**
+- `src/backend/routes/petri_net.py` — new endpoint
+- `src/backend/main.py` — registered new router
+- `fe/app/components/PetriNetViewer.tsx` — new visualization component
+- `fe/app/lib/api.ts` — added `getPetriNet()` + types
+- `fe/app/page.tsx` — added "Petri Net" tab
+- `.agents/project.md` — updated Phase 5 spec
+
+---
+
 ### 2026-04-10 — Removed DGL dependency, fixed Docker runtime errors
 
 **Problem:** `POST /api/discover-process` returned 500 errors inside Docker:
@@ -236,7 +308,7 @@ in `graph_encoder.py` that provides the same interface (`ntypes`, `edges()`, `nu
 ## NEXT STEPS (Priority Order)
 
 1. **Train GNN model** on generated event logs with synthetic Petri net pairs
-2. **Add Petri net visualization** with React Flow or D3.js in the frontend
+2. ~~**Add Petri net visualization**~~ ✅ Done — interactive SVG viewer with zoom/pan/click
 3. **Evaluate** model with conformance metrics (fitness, precision, simplicity)
 4. **Integration testing** of full pipeline (data → GNN → Petri net → UI)
 

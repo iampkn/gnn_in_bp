@@ -85,7 +85,8 @@ Tại điểm cuối của mạng (sau khi kiến trúc Petri Net được xác 
 1.  **API `/generate-data`**: Chạy tập script ở Phase 1. Trả về bảng danh sách Event Logs.
 2.  **API `/search-vector`**: Truy vấn Vector DB để tìm các "Task" giống nhau (Ví dụ: tìm các tác vụ có "Cost > 100" và thuộc "Graph G1").
 3.  **API `/discover-process`**: Upload Event Log $\rightarrow$ Chạy Inference với mô hình GNN $\rightarrow$ Trả về JSON chứa cấu trúc Petri Net và thông tin dự báo chi phí tối ưu.
-4.  **UI Component**: Tích hợp thư viện đồ thị trực quan (D3.js, React Flow, hoặc hiển thị kết quả từ `pm4py`) lên màn hình web.
+4.  **API `/petri-net`**: Khai thác Directly-Follows Graph (DFG) từ `event_log_all.csv` cho Graph ID đã chọn. Trả về nodes (activities với avg cost, occurrence count), edges (với frequency count), layout positions. Mỗi graph có pattern thực thi khác nhau vì gateway choices khác nhau trong mỗi trace.
+5.  **UI Component**: ✅ Hiển thị DFG trực quan bằng SVG (interactive: zoom, pan, click node). Edge hiển thị frequency label và độ dày tỷ lệ thuận với tần suất. Zoom sử dụng native `wheel` event listener (`passive: false`, dependency `[data]`) để attach sau khi SVG render xong và không conflict với browser scroll.
 
 ---
 
