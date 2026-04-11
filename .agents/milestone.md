@@ -2,7 +2,7 @@
 
 ## GNN Process Discovery (Khám phá Quy trình bằng Graph Neural Networks)
 
-**Last Updated:** 2026-04-10 (v7)
+**Last Updated:** 2026-04-11 (v9)
 
 ---
 
@@ -18,7 +18,8 @@ Do_An/
 ├── docker-compose.yml                      # ✅ Docker Compose (FE + BE + Qdrant)
 ├── Dockerfile                              # ✅ Backend Docker image (Python 3.12)
 ├── .dockerignore                           # ✅ Backend Docker ignore rules
-├── requirements.txt                        # Python dependencies (DGL-free, pure PyTorch)
+├── .env                                       # OPENAI_API_KEY (not committed)
+├── requirements.txt                        # Python dependencies (DGL-free, pure PyTorch + openai)
 ├── fe/                                     # ✅ NextJS Frontend (Phase 5)
 │   ├── Dockerfile                          # ✅ Frontend Docker image (Node 22, standalone)
 │   ├── .dockerignore                       # ✅ Frontend Docker ignore rules
@@ -28,11 +29,11 @@ Do_An/
 │   │   ├── layout.tsx                      # Root layout with Geist fonts
 │   │   ├── globals.css                     # Tailwind v4 + CSS vars
 │   │   ├── lib/
-│   │   │   └── api.ts                      # ✅ Typed API client (all 4 endpoints + health)
+│   │   │   └── api.ts                      # ✅ Typed API client (5 endpoints + health)
 │   │   └── components/
 │   │       ├── GenerateData.tsx            # ✅ Data generation form + results table
 │   │       ├── SearchVector.tsx            # ✅ Vector search form + result cards
-│   │       ├── DiscoverProcess.tsx         # ✅ Discovery form + Petri net display
+│   │       ├── DiscoverProcess.tsx         # ✅ Discovery form + Petri net display + XAI explanation
 │   │       └── PetriNetViewer.tsx          # ✅ Interactive process template graph viewer (structural)
 │   ├── package.json                        # Next 16.2.3, React 19.2.4
 │   └── ...
@@ -87,7 +88,8 @@ Do_An/
 │           ├── generate_data.py            # POST /api/generate-data
 │           ├── search_vector.py            # GET  /api/search-vector
 │           ├── discover_process.py         # POST /api/discover-process
-│           └── petri_net.py               # GET  /api/petri-net (template graph structure)
+│           ├── petri_net.py               # GET  /api/petri-net (template graph structure)
+│           └── explain_net.py            # ✅ POST /api/explain-net (XAI via OpenAI)
 ```
 
 ---
@@ -150,17 +152,22 @@ Do_An/
 
 ### Phase 5: Web Interface ✅ IMPLEMENTED
 
-- **Backend:** FastAPI with 4 API routes
+- **Backend:** FastAPI with 5 API routes
     - `POST /api/generate-data` → Run Phase 1 pipeline
     - `GET  /api/search-vector` → Query similar tasks via Qdrant
     - `POST /api/discover-process` → GNN inference → Petri net JSON
     - `GET  /api/petri-net?graph_id=G1` → Return process template graph structure (each node once)
+    - `POST /api/explain-net` → **XAI**: send template graph + discovered net to OpenAI for business explanation
     - ✅ CORS origins configurable via `CORS_ORIGINS` env var
+    - ✅ `OPENAI_API_KEY` from `.env` file, passed via `env_file` in docker-compose
 - **Frontend:** NextJS 16 interactive dashboard in `fe/`
     - ✅ Tabbed dashboard UI (4 tabs) with backend health check indicator
     - ✅ **Generate Data** tab: configure variants/traces/seed, view summary stats + per-graph table
     - ✅ **Vector Search** tab: search by activity/graph_id/min_cost, view scored result cards
     - ✅ **Process Discovery** tab: select graph_id or upload CSV, view Petri net structure
+        - ✅ **XAI "Ask AI" button** per Petri Net card: calls OpenAI (gpt-4o-mini) to explain
+          the discovered net in Vietnamese for managers — includes meaning, comparison with
+          template, optimization suggestions, bottleneck warnings
     - ✅ **Petri Net** tab: interactive process template graph viewer
         - Shows **template graph structure directly** — each node appears exactly once
         - Gateway nodes visible with branching edges (all branches shown)
@@ -219,6 +226,49 @@ Do_An/
 ---
 
 ## CHANGE LOG
+
+### 2026-04-11 — Added XAI (Explainable AI) feature to Process Discovery tab
+
+**Problem:** The Process Discovery tab showed technical metrics (log-probability, place
+structure, transitions) that are meaningful for data scientists but difficult for managers
+to interpret. Managers couldn't understand how to apply these results to optimize workflows.
+
+**Solution:** Added an "Ask AI to Explain" button after each discovered Petri Net card.
+When clicked, it sends the **template graph structure** (nodes, edges, costs, human_res)
+plus the **discovered net** (rank, log_probability, transitions, places) to OpenAI's
+GPT-4o-mini model. The AI responds in Vietnamese with a structured business analysis:
+
+1. **Ý nghĩa** — What the discovered Petri Net means in business context
+2. **So sánh** — How it compares to the original template process
+3. **Đề xuất tối ưu** — Suggestions to shorten/optimize the process, highlight costly steps
+4. **Rủi ro** — Bottleneck warnings and gateway monitoring recommendations
+
+**Implementation:**
+- New backend route: `POST /api/explain-net` in `src/backend/routes/explain_net.py`
+  - Receives `graph_id` + `discovered_net` (rank, log_prob, transitions, places)
+  - Loads the template graph (G1-G22) for full context
+  - Builds a detailed Vietnamese prompt with both template and discovered net data
+  - Calls OpenAI `gpt-4o-mini` (temperature=0.7, max_tokens=1500)
+  - Returns `{ explanation: string }` in Vietnamese
+- Frontend: "Ask AI to Explain" button in `DiscoverProcess.tsx`
+  - Amber-themed button with lightbulb icon
+  - Loading spinner during API call
+  - Explanation rendered as **Markdown** via `react-markdown` + `@tailwindcss/typography`
+    (headings, bold, bullet lists, numbered lists all display correctly)
+  - "Hide explanation" toggle to collapse
+- `OPENAI_API_KEY` read from `.env` file, passed to Docker via `env_file` in docker-compose
+
+**Files changed:**
+- `src/backend/routes/explain_net.py` — **new file**: XAI endpoint
+- `src/backend/main.py` — registered `explain_net` router
+- `requirements.txt` — added `openai>=1.0.0`
+- `docker-compose.yml` — added `env_file: .env` to backend service
+- `fe/app/lib/api.ts` — added `ExplainNetRequest`, `ExplainNetResult`, `explainNet()`
+- `fe/app/components/DiscoverProcess.tsx` — added "Ask AI" button + markdown explanation panel
+- `fe/app/globals.css` — added `@plugin "@tailwindcss/typography"` for prose styles
+- `fe/package.json` — added `react-markdown`, `@tailwindcss/typography` dependencies
+
+---
 
 ### 2026-04-10 — Fixed inflated event counts: show template graph structure, reduce traces
 

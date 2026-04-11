@@ -1,7 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { discoverProcess, type DiscoverProcessResult } from "../lib/api";
+import { useState, useRef, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
+import {
+  discoverProcess,
+  explainNet,
+  type DiscoverProcessResult,
+} from "../lib/api";
 
 export default function DiscoverProcess() {
   const [graphId, setGraphId] = useState("G1");
@@ -11,6 +16,42 @@ export default function DiscoverProcess() {
   const [result, setResult] = useState<DiscoverProcessResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const [explaining, setExplaining] = useState<Record<number, boolean>>({});
+  const [explanations, setExplanations] = useState<Record<number, string>>({});
+  const [explainErrors, setExplainErrors] = useState<Record<number, string>>({});
+
+  const handleExplain = useCallback(
+    async (net: DiscoverProcessResult["discovered_nets"][0]) => {
+      const gid = result?.input_info.graph_id;
+      if (!gid) return;
+
+      setExplaining((prev) => ({ ...prev, [net.rank]: true }));
+      setExplainErrors((prev) => ({ ...prev, [net.rank]: "" }));
+
+      try {
+        const resp = await explainNet({
+          graph_id: gid,
+          discovered_net: {
+            rank: net.rank,
+            log_probability: net.log_probability,
+            num_places: net.num_places,
+            transitions: net.transitions,
+            places: net.places,
+          },
+        });
+        setExplanations((prev) => ({ ...prev, [net.rank]: resp.explanation }));
+      } catch (e) {
+        setExplainErrors((prev) => ({
+          ...prev,
+          [net.rank]: e instanceof Error ? e.message : "Unknown error",
+        }));
+      } finally {
+        setExplaining((prev) => ({ ...prev, [net.rank]: false }));
+      }
+    },
+    [result],
+  );
 
   const handleDiscover = async () => {
     setLoading(true);
@@ -222,6 +263,69 @@ export default function DiscoverProcess() {
                   </div>
                 </div>
               )}
+
+              <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                {!explanations[net.rank] && (
+                  <button
+                    onClick={() => handleExplain(net)}
+                    disabled={explaining[net.rank] || !result?.input_info.graph_id}
+                    className="inline-flex items-center gap-2 rounded-md bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white transition-colors"
+                  >
+                    {explaining[net.rank] ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        AI is analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        Ask AI to Explain
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {explainErrors[net.rank] && (
+                  <div className="mt-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                    <p className="text-sm text-red-800 dark:text-red-300">
+                      {explainErrors[net.rank]}
+                    </p>
+                  </div>
+                )}
+
+                {explanations[net.rank] && (
+                  <div className="mt-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <svg className="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                      <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                        AI Analysis — Petri Net #{net.rank}
+                      </h4>
+                    </div>
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-zinc-700 dark:text-zinc-300">
+                      <ReactMarkdown>{explanations[net.rank]}</ReactMarkdown>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setExplanations((prev) => {
+                          const copy = { ...prev };
+                          delete copy[net.rank];
+                          return copy;
+                        });
+                      }}
+                      className="mt-3 text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+                    >
+                      Hide explanation
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>

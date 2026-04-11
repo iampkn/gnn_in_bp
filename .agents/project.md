@@ -87,6 +87,7 @@ Tại điểm cuối của mạng (sau khi kiến trúc Petri Net được xác 
 3.  **API `/discover-process`**: Upload Event Log $\rightarrow$ Chạy Inference với mô hình GNN $\rightarrow$ Trả về JSON chứa cấu trúc Petri Net và thông tin dự báo chi phí tối ưu.
 4.  **API `/petri-net`**: Trả về cấu trúc đồ thị quy trình (template graph) cho Graph ID đã chọn. Mỗi node hiển thị đúng 1 lần với cost, human_res gốc. Gateway nodes hiển thị với tất cả nhánh rẽ. Không cần event log — đọc trực tiếp từ template graphs (G1-G2 từ CSV, G3-G22 từ `process_templates.py`).
 5.  **UI Component**: ✅ Hiển thị cấu trúc quy trình trực quan bằng SVG (interactive: zoom, pan, click node). Mỗi bước chỉ xuất hiện 1 lần, gateway hiển thị đầy đủ nhánh rẽ. Zoom sử dụng native `wheel` event listener (`passive: false`, dependency `[data]`). Node detail panel hiển thị Cost và Human Res.
+6.  **API `/explain-net` (XAI)**: ✅ Nhận thông tin template graph + discovered Petri Net, gọi OpenAI GPT-4o-mini để phân tích và giải thích cho nhà quản lý bằng tiếng Việt. Bao gồm: ý nghĩa Place Structure, so sánh với quy trình gốc, đề xuất tối ưu (rút ngắn, song song hóa), cảnh báo bottleneck/gateway. Nút "Ask AI to Explain" hiển thị sau mỗi Petri Net card trên tab Process Discovery. Key OpenAI đọc từ file `.env`. Kết quả trả về dạng Markdown được render đầy đủ (headings, bold, bullet lists) qua `react-markdown` + `@tailwindcss/typography`.
 
 ---
 

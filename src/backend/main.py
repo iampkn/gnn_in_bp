@@ -18,7 +18,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.backend.routes import generate_data, search_vector, discover_process, petri_net
+from src.backend.routes import generate_data, search_vector, discover_process, petri_net, explain_net
 
 app = FastAPI(
     title="GNN Process Discovery API",
@@ -42,6 +42,7 @@ app.include_router(generate_data.router, prefix="/api", tags=["Data Generation"]
 app.include_router(search_vector.router, prefix="/api", tags=["Vector Search"])
 app.include_router(discover_process.router, prefix="/api", tags=["Process Discovery"])
 app.include_router(petri_net.router, prefix="/api", tags=["Petri Net Viewer"])
+app.include_router(explain_net.router, prefix="/api", tags=["XAI Explanation"])
 
 
 @app.get("/")
