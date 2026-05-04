@@ -76,3 +76,4 @@ Desktop.ini
 
 # Optional: keep shared VS Code settings; uncomment to ignore all
 # .vscode/
+.agents/
